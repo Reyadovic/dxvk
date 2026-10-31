@@ -5,6 +5,7 @@
 
 #include "dxvk_device.h"
 #include "dxvk_context.h"
+#include "dxvk_acu_probe.h"
 
 namespace dxvk {
   
@@ -919,6 +920,10 @@ namespace dxvk {
           uint32_t x,
           uint32_t y,
           uint32_t z) {
+    if (unlikely(acuSkipCompute(m_device->getCurrentFrameId(),
+        m_state.cp.shaders.cs, uint64_t(x) * uint64_t(y) * uint64_t(z))))
+      return;
+
     if (this->commitComputeState()) {
       m_queryManager.beginQueries(m_cmd,
         VK_QUERY_TYPE_PIPELINE_STATISTICS);
@@ -934,6 +939,10 @@ namespace dxvk {
   
   void DxvkContext::dispatchIndirect(
           VkDeviceSize      offset) {
+    if (unlikely(acuSkipCompute(m_device->getCurrentFrameId(),
+        m_state.cp.shaders.cs, 0u)))
+      return;
+
     auto bufferSlice = m_state.id.argBuffer.getSliceHandle(
       offset, sizeof(VkDispatchIndirectCommand));
 
@@ -1723,6 +1732,10 @@ namespace dxvk {
   void DxvkContext::drawGeneric(
           uint32_t                  count,
     const T*                        draws) {
+    if (unlikely(acuSkipDraw<Indexed>(m_device->getCurrentFrameId(),
+        m_state.om.renderTargets, m_state.gp.shaders.fs, count, draws)))
+      return;
+
     if (this->commitGraphicsState<Indexed, false>()) {
       if (count == 1u) {
         // Most common case, just emit a single draw
@@ -1842,6 +1855,10 @@ namespace dxvk {
           uint32_t                  count,
           uint32_t                  stride,
           bool                      unroll) {
+    if (unlikely(acuSkipIndirect(m_device->getCurrentFrameId(),
+        m_state.om.renderTargets, m_state.gp.shaders.fs, count)))
+      return;
+
     constexpr VkDeviceSize elementSize = Indexed
       ? sizeof(VkDrawIndexedIndirectCommand)
       : sizeof(VkDrawIndirectCommand);
@@ -1901,6 +1918,10 @@ namespace dxvk {
           VkDeviceSize          countOffset,
           uint32_t              maxCount,
           uint32_t              stride) {
+    if (unlikely(acuSkipIndirect(m_device->getCurrentFrameId(),
+        m_state.om.renderTargets, m_state.gp.shaders.fs, 1u)))
+      return;
+
     if (this->commitGraphicsState<Indexed, true>()) {
       auto argDescriptor = m_state.id.argBuffer.getDescriptor();
       auto cntDescriptor = m_state.id.cntBuffer.getDescriptor();
